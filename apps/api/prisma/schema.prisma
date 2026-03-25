@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id              String   @id @default(cuid())
+  name            String
+  user_id         String
+  org_id          String?
+  status          String   @default("draft")
+  fountain_config Json
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  jobs            Job[]
+
+  @@index([user_id])
+  @@index([org_id])
+  @@map("projects")
+}
+
+model Job {
+  id                      String    @id @default(cuid())
+  project_id              String
+  project                 Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  status                  String    @default("pending")
+  stage                   String?
+  progress_pct            Int       @default(0)
+  audio_file_key          String?
+  analysis_result_key     String?
+  timeline_key            String?
+  code_package_key        String?
+  simulation_data_key     String?
+  processing_time_ms      Int?
+  error_message           String?
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+  completed_at            DateTime?
+
+  @@index([project_id])
+  @@index([status])
+  @@map("jobs")
+}

@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+  PNPM_VERSION: '9'
+
+jobs:
+  # ── TypeScript lint + type check ─────────────────────────────────────────
+  ts-lint:
+    name: TypeScript Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @fountainflow/shared build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm typecheck
+
+  # ── Frontend tests ────────────────────────────────────────────────────────
+  web-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: ts-lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @fountainflow/shared build
+
+      - name: Run frontend tests
+        run: pnpm --filter web test --run
+
+  # ── API tests ─────────────────────────────────────────────────────────────
+  api-test:
+    name: API Tests
+    runs-on: ubuntu-latest
+    needs: ts-lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fountainflow
+          POSTGRES_PASSWORD: fountainflow
+          POSTGRES_DB: fountainflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @fountainflow/shared build
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgresql://fountainflow:fountainflow@localhost:5432/fountainflow_test
+        run: pnpm --filter api db:migrate
+
+      - name: Run API tests
+        env:
+          DATABASE_URL: postgresql://fountainflow:fountainflow@localhost:5432/fountainflow_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          CLERK_SECRET_KEY: test_key
+          JWT_SECRET: test_secret
+        run: pnpm --filter api test
+
+  # ── Python worker tests ────────────────────────────────────────────────────
+  worker-test:
+    name: Python Worker Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/worker/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: apps/worker
+        run: pip install -r requirements.txt
+
+      - name: Run worker tests
+        working-directory: apps/worker
+        env:
+          REDIS_URL: redis://localhost:6379
+          S3_ENDPOINT: http://localhost:9000
+          S3_BUCKET: test-bucket
+          S3_ACCESS_KEY: test
+          S3_SECRET_KEY: test
+        run: python -m pytest tests/ -v --tb=short
+
+  # ── Build check ────────────────────────────────────────────────────────────
+  build:
+    name: Build All
+    runs-on: ubuntu-latest
+    needs: [ts-lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        env:
+          SKIP_ENV_VALIDATION: true
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+          NEXT_PUBLIC_WS_URL: ws://localhost:3001
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+        run: pnpm build

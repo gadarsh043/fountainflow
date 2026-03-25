@@ -1,0 +1,337 @@
+"""
+ESP32 generator — same concept as Arduino Mega but uses SPIFFS and WiFi trigger.
+
+ESP32-WROOM: 520 KB SRAM, 4 MB flash.
+Show data stored in SPIFFS filesystem (up to ~3 MB for ~8-min show at 40fps).
+For longer shows, use SD card via SPI.
+"""
+
+from __future__ import annotations
+
+import base64
+import logging
+import re
+from typing import Any
+
+from code_generation.arduino_mega import (
+    _build_binary_data,
+    _expand_to_frames,
+    _generate_readme as _arduino_readme,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def generate_esp32(
+    show_timeline: dict[str, Any],
+    fountain_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Generate ESP32 .ino sketch + SPIFFS binary data.
+
+    Args:
+        show_timeline: ShowTimeline dict.
+        fountain_config: FountainConfig dict.
+
+    Returns:
+        GenerationResult dict.
+    """
+    meta = show_timeline.get("metadata", {})
+    song_name = meta.get("song_name", "show")
+    duration_ms = float(meta.get("duration_ms", 0))
+    nozzles: list[dict[str, Any]] = fountain_config.get("nozzles", [])
+    leds: dict[str, Any] = fountain_config.get("leds", {})
+
+    # Simple pin assignments for ESP32
+    valve_pins, vfd_pins, led_pin = _assign_esp32_pins(nozzles, leds)
+
+    # Expand to frames and build binary
+    frame_data = _expand_to_frames(show_timeline)
+    binary_data = _build_binary_data(frame_data)
+    binary_b64 = base64.b64encode(binary_data).decode("ascii")
+
+    ino_code = _generate_esp32_ino(
+        song_name=song_name,
+        duration_ms=int(duration_ms),
+        valve_pins=valve_pins,
+        vfd_pins=vfd_pins,
+        led_pin=led_pin,
+        frame_count=len(frame_data),
+        channel_count=len(frame_data[0]) if frame_data else 0,
+        meta=meta,
+    )
+
+    safe_name = re.sub(r"[^\w\-]", "_", song_name.lower())[:30]
+    readme = _generate_esp32_readme(song_name, binary_data, valve_pins, vfd_pins, led_pin)
+
+    return {
+        "platform": "esp32",
+        "files": [
+            {
+                "filename": f"{safe_name}_esp32.ino",
+                "content_type": "text",
+                "content": ino_code,
+                "size_bytes": len(ino_code.encode()),
+                "description": "ESP32 Arduino sketch",
+            },
+            {
+                "filename": "data/show_data.bin",
+                "content_type": "binary",
+                "content_b64": binary_b64,
+                "size_bytes": len(binary_data),
+                "description": "SPIFFS data file (upload with Arduino ESP32FS plugin)",
+            },
+            {
+                "filename": "ESP32_SETUP.md",
+                "content_type": "text",
+                "content": readme,
+                "size_bytes": len(readme.encode()),
+                "description": "ESP32 setup instructions",
+            },
+        ],
+        "readme": readme,
+        "storage_required_bytes": len(binary_data),
+        "generated_at": meta.get("generated_at", ""),
+    }
+
+
+def _assign_esp32_pins(
+    nozzles: list[dict[str, Any]],
+    leds: dict[str, Any],
+) -> tuple[dict[str, int], dict[str, int], int]:
+    """Assign GPIO pins for ESP32.
+
+    Args:
+        nozzles: NozzleConfig list.
+        leds: LEDConfig dict.
+
+    Returns:
+        (valve_pins, vfd_pins, led_pin)
+    """
+    # ESP32 usable digital GPIO (avoid strapping pins 0, 2, 12)
+    digital_pins = [4, 5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
+    # ESP32 PWM-capable (all GPIO, but use LEDC — pick some)
+    pwm_pins = [34, 35, 36, 39, 25, 26, 27, 32, 33]
+    # NeoPixel data
+    led_pin = 13
+
+    valve_pins: dict[str, int] = {}
+    vfd_pins: dict[str, int] = {}
+    pin_idx = 0
+    pwm_idx = 0
+
+    for nozzle in nozzles:
+        nozzle_id = nozzle["id"]
+        count = int(nozzle.get("count", 1))
+        for i in range(count):
+            key = f"{nozzle_id}_{i + 1:02d}" if count > 1 else nozzle_id
+            if pin_idx < len(digital_pins):
+                valve_pins[key] = digital_pins[pin_idx]
+                pin_idx += 1
+            if pwm_idx < len(pwm_pins):
+                vfd_pins[nozzle_id] = pwm_pins[pwm_idx]
+                pwm_idx += 1
+
+    return valve_pins, vfd_pins, led_pin
+
+
+def _generate_esp32_ino(
+    song_name: str,
+    duration_ms: int,
+    valve_pins: dict[str, int],
+    vfd_pins: dict[str, int],
+    led_pin: int,
+    frame_count: int,
+    channel_count: int,
+    meta: dict[str, Any],
+) -> str:
+    """Generate ESP32 .ino sketch.
+
+    Args:
+        song_name: Song name for header comment.
+        duration_ms: Duration in ms.
+        valve_pins: Valve → pin.
+        vfd_pins: VFD → pin.
+        led_pin: LED pin.
+        frame_count: Total frames.
+        channel_count: Channels per frame.
+        meta: ShowTimeline metadata.
+
+    Returns:
+        .ino source code.
+    """
+    valve_pin_list = ", ".join(str(p) for p in valve_pins.values())
+    vfd_pin_list = ", ".join(str(p) for p in vfd_pins.values())
+    valve_count = len(valve_pins)
+    vfd_count = len(vfd_pins)
+
+    return f"""// AUTO-GENERATED by FountainFlow — do not edit manually
+// Song: {song_name}
+// Duration: {duration_ms} ms
+// Generated: {meta.get("generated_at", "")}
+// Platform: ESP32
+
+#include <SPIFFS.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Adafruit_NeoPixel.h>
+
+// ── WiFi Config (change these) ────────────────────────────────────────────
+const char* WIFI_SSID     = "FountainWiFi";
+const char* WIFI_PASSWORD = "FountainPass";
+
+// ── Pin assignments ───────────────────────────────────────────────────────
+const int VALVE_PINS[{valve_count}] = {{{valve_pin_list}}};
+const int VFD_PINS[{vfd_count}]    = {{{vfd_pin_list}}};
+const int LED_DATA_PIN = {led_pin};
+
+// ── Show parameters ───────────────────────────────────────────────────────
+const int  FRAME_RATE     = 40;
+const long FRAME_INTERVAL = 25L;
+const int  CHANNEL_COUNT  = {channel_count};
+const long FRAME_COUNT    = {frame_count}L;
+const int  VALVE_COUNT    = {valve_count};
+const int  VFD_COUNT      = {vfd_count};
+const int  LED_COUNT      = max(0, (CHANNEL_COUNT - VALVE_COUNT - VFD_COUNT) / 3);
+
+// ── Runtime state ─────────────────────────────────────────────────────────
+Adafruit_NeoPixel strip(LED_COUNT > 0 ? LED_COUNT : 1, LED_DATA_PIN, NEO_GRB + NEO_KHZ800);
+WebServer server(80);
+File showFile;
+long currentFrame = 0;
+unsigned long frameStartMs = 0;
+bool showRunning = false;
+uint8_t frameBuffer[{channel_count}];
+
+void setup() {{
+  Serial.begin(115200);
+
+  for (int i = 0; i < VALVE_COUNT; i++) {{ pinMode(VALVE_PINS[i], OUTPUT); digitalWrite(VALVE_PINS[i], LOW); }}
+  for (int i = 0; i < VFD_COUNT; i++) {{ ledcSetup(i, 5000, 8); ledcAttachPin(VFD_PINS[i], i); ledcWrite(i, 0); }}
+
+  strip.begin(); strip.clear(); strip.show();
+
+  if (!SPIFFS.begin(true)) {{ Serial.println("SPIFFS mount failed"); return; }}
+  if (!SPIFFS.exists("/show_data.bin")) {{ Serial.println("show_data.bin not found in SPIFFS"); return; }}
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to WiFi");
+  for (int i = 0; i < 20 && WiFi.status() != WL_CONNECTED; i++) {{ delay(500); Serial.print("."); }}
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED) {{
+    Serial.print("IP address: "); Serial.println(WiFi.localIP());
+    server.on("/start", HTTP_GET, []() {{
+      server.send(200, "text/plain", "Show starting!");
+      startShow();
+    }});
+    server.on("/stop", HTTP_GET, []() {{
+      stopAll(); showRunning = false;
+      server.send(200, "text/plain", "Show stopped.");
+    }});
+    server.begin();
+    Serial.println("HTTP server started. GET /start to begin show.");
+  }} else {{
+    Serial.println("WiFi failed — auto-starting show in 3s");
+    delay(3000);
+    startShow();
+  }}
+}}
+
+void loop() {{
+  server.handleClient();
+  if (!showRunning) return;
+
+  if (currentFrame >= FRAME_COUNT) {{ stopAll(); showRunning = false; return; }}
+
+  unsigned long now = millis();
+  if ((now - frameStartMs) < (unsigned long)(currentFrame * FRAME_INTERVAL)) return;
+
+  if (showFile.read(frameBuffer, CHANNEL_COUNT) != CHANNEL_COUNT) {{
+    showFile.seek(15); currentFrame = 0; return;
+  }}
+  currentFrame++;
+
+  for (int i = 0; i < VALVE_COUNT; i++) digitalWrite(VALVE_PINS[i], frameBuffer[i] ? HIGH : LOW);
+  for (int i = 0; i < VFD_COUNT; i++) ledcWrite(i, frameBuffer[VALVE_COUNT + i]);
+
+  if (LED_COUNT > 0) {{
+    int ledOffset = VALVE_COUNT + VFD_COUNT;
+    for (int i = 0; i < LED_COUNT; i++) {{
+      int base = ledOffset + i * 3;
+      strip.setPixelColor(i, frameBuffer[base], frameBuffer[base+1], frameBuffer[base+2]);
+    }}
+    strip.show();
+  }}
+}}
+
+void startShow() {{
+  showFile = SPIFFS.open("/show_data.bin", "r");
+  showFile.seek(15);
+  currentFrame = 0;
+  frameStartMs = millis();
+  showRunning = true;
+  Serial.println("Show started!");
+}}
+
+void stopAll() {{
+  for (int i = 0; i < VALVE_COUNT; i++) digitalWrite(VALVE_PINS[i], LOW);
+  for (int i = 0; i < VFD_COUNT; i++) ledcWrite(i, 0);
+  strip.clear(); strip.show();
+}}
+"""
+
+
+def _generate_esp32_readme(
+    song_name: str,
+    binary_data: bytes,
+    valve_pins: dict[str, int],
+    vfd_pins: dict[str, int],
+    led_pin: int,
+) -> str:
+    """Generate ESP32 setup README.
+
+    Args:
+        song_name: Song name.
+        binary_data: Binary data for size display.
+        valve_pins: Valve pin map.
+        vfd_pins: VFD pin map.
+        led_pin: LED pin.
+
+    Returns:
+        Markdown README.
+    """
+    return f"""# FountainFlow — ESP32 Setup
+
+## Song: {song_name}
+## SPIFFS data size: {len(binary_data):,} bytes ({len(binary_data) / 1024:.1f} KB)
+
+## Required libraries
+- Adafruit NeoPixel
+- ESP32 Arduino core (installed via Board Manager)
+
+## Steps
+1. Open the .ino sketch in Arduino IDE
+2. Install ESP32 board support: Tools → Board Manager → "esp32"
+3. **Upload SPIFFS data** first:
+   - Install "ESP32 Sketch Data Upload" plugin
+   - Place `show_data.bin` in the `data/` folder (already done)
+   - Tools → ESP32 Sketch Data Upload
+4. **Set board:** Tools → Board → ESP32 Dev Module
+5. **Set partition scheme:** Huge APP (3MB No OTA)
+6. Upload the sketch
+7. Open Serial Monitor at 115200 baud
+8. **Start via WiFi:** `curl http://<ESP32_IP>/start`
+   (or the show starts automatically if WiFi fails)
+
+## Change WiFi credentials
+Edit the top of the .ino file:
+```cpp
+const char* WIFI_SSID     = "YourNetwork";
+const char* WIFI_PASSWORD  = "YourPassword";
+```
+
+## Wiring
+Valves: {dict(list(valve_pins.items())[:4])} ...
+VFDs:   {dict(list(vfd_pins.items())[:4])} ...
+LEDs:   Pin {led_pin}
+"""
