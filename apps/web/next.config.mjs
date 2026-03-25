@@ -1,6 +1,5 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   transpilePackages: ['@fountainflow/shared'],
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog'],

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import type { Request } from 'express';
 import { AppConfig } from '../config/configuration';
 
@@ -27,20 +27,16 @@ export interface AuthenticatedRequest extends Request {
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
   private readonly logger = new Logger(ClerkAuthGuard.name);
-  private readonly clerkClient: ReturnType<typeof createClerkClient>;
+  private readonly secretKey: string;
 
   constructor(
     private readonly configService: ConfigService<AppConfig, true>,
     private readonly reflector: Reflector,
   ) {
-    const secretKey = this.configService.get('CLERK_SECRET_KEY', {
-      infer: true,
-    });
-    this.clerkClient = createClerkClient({ secretKey });
+    this.secretKey = this.configService.get('CLERK_SECRET_KEY', { infer: true });
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check if route is marked public
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -54,38 +50,26 @@ export class ClerkAuthGuard implements CanActivate {
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
-      throw new UnauthorizedException(
-        'Authorization token is missing or malformed',
-      );
+      throw new UnauthorizedException('Authorization token is missing or malformed');
     }
 
     try {
-      // Verify the JWT token with Clerk
-      const requestState = await this.clerkClient.authenticateRequest(request, {
-        jwtKey: undefined, // Use Clerk's network verification
-        authorizedParties: [],
-      });
+      // verifyToken works directly with a JWT string — no native Request needed
+      const payload = await verifyToken(token, { secretKey: this.secretKey });
 
-      if (!requestState.isSignedIn) {
-        throw new UnauthorizedException('Invalid or expired token');
-      }
-
-      const claims = requestState.toAuth();
-
-      if (!claims?.userId) {
+      if (!payload?.sub) {
         throw new UnauthorizedException('Token does not contain user ID');
       }
 
-      // Attach authenticated user to request
       request.user = {
-        userId: claims.userId,
-        orgId: claims.orgId ?? null,
-        sessionId: claims.sessionId,
-        email: null, // Email is not in JWT claims by default
+        userId: payload.sub,
+        orgId: (payload['org_id'] as string | undefined) ?? null,
+        sessionId: (payload['sid'] as string | undefined) ?? '',
+        email: null,
       };
 
       this.logger.debug(
-        `Authenticated user: ${claims.userId}, org: ${claims.orgId ?? 'none'}`,
+        `Authenticated user: ${payload.sub}, org: ${(payload['org_id'] as string | undefined) ?? 'none'}`,
       );
 
       return true;
@@ -103,17 +87,9 @@ export class ClerkAuthGuard implements CanActivate {
 
   private extractTokenFromHeader(request: Request): string | null {
     const authHeader = request.headers.authorization;
-
-    if (!authHeader) {
-      return null;
-    }
-
+    if (!authHeader) return null;
     const [type, token] = authHeader.split(' ');
-
-    if (type?.toLowerCase() !== 'bearer' || !token) {
-      return null;
-    }
-
+    if (type?.toLowerCase() !== 'bearer' || !token) return null;
     return token;
   }
 }

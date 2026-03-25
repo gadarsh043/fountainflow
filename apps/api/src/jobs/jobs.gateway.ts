@@ -11,7 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import type { AppConfig } from '../config/configuration';
 import type {
   JobProgressEvent,
@@ -43,15 +43,12 @@ export class JobsGateway
   // Map userId -> Set of socket IDs for targeted broadcasting
   private readonly userSockets = new Map<string, Set<string>>();
 
-  private readonly clerkClient: ReturnType<typeof createClerkClient>;
+  private readonly secretKey: string;
 
   constructor(
     private readonly configService: ConfigService<AppConfig, true>,
   ) {
-    const secretKey = this.configService.get('CLERK_SECRET_KEY', {
-      infer: true,
-    });
-    this.clerkClient = createClerkClient({ secretKey });
+    this.secretKey = this.configService.get('CLERK_SECRET_KEY', { infer: true });
   }
 
   afterInit(_server: Server): void {
@@ -76,8 +73,8 @@ export class JobsGateway
         return;
       }
 
-      // Verify with Clerk
-      const payload = await this.clerkClient.verifyToken(token);
+      // Verify with Clerk — verifyToken works directly with JWT string
+      const payload = await verifyToken(token, { secretKey: this.secretKey });
 
       if (!payload?.sub) {
         this.logger.warn(
@@ -119,7 +116,7 @@ export class JobsGateway
   }
 
   handleDisconnect(client: Socket): void {
-    const authSocket = client as Partial<AuthenticatedSocket>;
+    const authSocket = client as unknown as Partial<AuthenticatedSocket>;
 
     if (authSocket.userId) {
       const userSocketSet = this.userSockets.get(authSocket.userId);

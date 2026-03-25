@@ -37,6 +37,6 @@ import type { AppConfig } from '../config/configuration';
   ],
   controllers: [JobsController],
   providers: [JobsService, JobsGateway, JobsProcessor],
-  exports: [JobsService, JobsGateway],
+  exports: [JobsService, JobsGateway, BullModule],
 })
 export class JobsModule {}

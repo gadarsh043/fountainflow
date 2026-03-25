@@ -22,6 +22,7 @@ class SocketIoAdapter extends IoAdapter {
         origin: process.env['CORS_ORIGINS']?.split(',') ?? [
           'http://localhost:3000',
           'http://localhost:3001',
+          'http://localhost:3002',
         ],
         credentials: true,
         methods: ['GET', 'POST'],
@@ -30,7 +31,8 @@ class SocketIoAdapter extends IoAdapter {
       pingTimeout: 60000,
       pingInterval: 25000,
     });
-    return server as ReturnType<typeof super.createIOServer>;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return server;
   }
 }
 
@@ -51,6 +53,7 @@ async function bootstrap(): Promise<void> {
   const corsOrigins = process.env['CORS_ORIGINS']?.split(',') ?? [
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3002',
     'http://localhost:5173', // Vite dev server
   ];
 

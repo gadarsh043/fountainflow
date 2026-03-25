@@ -4,7 +4,7 @@ celery==5.4.0
 redis==5.2.0
 librosa==0.10.2
 madmom==0.16.1
-msaf==0.1.8
+msaf==0.1.80
 soundfile==0.12.1
 numpy==1.26.4
 scipy==1.14.0

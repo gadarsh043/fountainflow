@@ -38,9 +38,10 @@ Fountain Config ─────────────────────�
 ## Prerequisites
 
 - **Node.js 20+** and **pnpm 9+**
-- **Python 3.11+** with pip
+- **Python 3.11** (exact — madmom requires 3.11)
 - **Docker** and **Docker Compose** (for PostgreSQL, Redis, MinIO)
 - **FFmpeg** installed and on PATH (`brew install ffmpeg` / `apt install ffmpeg`)
+- **Ollama** (optional, for local AI agent) — `ollama pull qwen2.5:14b`
 
 ---
 
@@ -54,13 +55,6 @@ cd fountainflow
 
 # Install Node dependencies
 pnpm install
-
-# Install Python dependencies
-cd apps/worker
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cd ../..
 ```
 
 ### 2. Start infrastructure
@@ -74,50 +68,66 @@ docker-compose up -d
 
 ```bash
 cp .env.example .env
-# Edit .env — see next_steps.md for which values need manual setup
+# Fill in CLERK_SECRET_KEY and NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY from clerk.com
 ```
 
-Required environment variables:
+Required environment variables (all others have defaults in `.env.example`):
 ```
-DATABASE_URL=postgresql://fountainflow:fountainflow@localhost:5432/fountainflow
-REDIS_URL=redis://localhost:6379
-S3_ENDPOINT=http://localhost:9000
-S3_BUCKET=fountainflow-dev
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
-CLERK_SECRET_KEY=          # Get from clerk.com dashboard
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=  # Get from clerk.com dashboard
+CLERK_SECRET_KEY=sk_test_...        # From clerk.com dashboard
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...  # From clerk.com dashboard
 ```
 
-### 4. Run database migrations
+Create env symlinks so each app picks up the root `.env`:
+```bash
+ln -sf "$(pwd)/.env" apps/api/.env
+ln -sf "$(pwd)/.env" apps/web/.env.local
+```
+
+### 4. Install Python dependencies
+
+> **Important:** madmom requires Cython and numpy before it can be built. Install in this order:
 
 ```bash
-pnpm --filter api db:migrate
+cd apps/worker
+python3.11 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install Cython "numpy==1.26.4"
+pip install madmom==0.16.1 --no-build-isolation
+pip install -r requirements.txt
+cd ../..
 ```
 
-### 5. Start all services
+### 5. Run database migrations
 
 ```bash
-# Terminal 1: Frontend
+cd apps/api
+npx prisma migrate dev --name init
+cd ../..
+```
+
+### 6. Start all services
+
+```bash
+# Terminal 1: Frontend (port 3002)
 pnpm --filter web dev
 
-# Terminal 2: API server
+# Terminal 2: API server (port 3001)
 pnpm --filter api dev
 
-# Terminal 3: Python worker
+# Terminal 3: Python worker (port 8001)
 cd apps/worker
 source venv/bin/activate
 uvicorn main:app --reload --port 8001
+
+# Terminal 4 (optional): Celery worker for background jobs
+cd apps/worker
+source venv/bin/activate
+celery -A worker worker --loglevel=info
 ```
 
-Or use the combined command:
-```bash
-pnpm dev  # Runs all three via turbo
-```
+### 7. Open the app
 
-### 6. Open the app
-
-Navigate to `http://localhost:3000`
+Navigate to `http://localhost:3002`
 
 ---
 
@@ -194,29 +204,27 @@ React Three Fiber renders the fountain with GPU-driven particle systems:
 
 ```bash
 # Development
-pnpm dev                  # Start all services
-pnpm build                # Build everything
-pnpm lint                 # Lint all packages
-pnpm typecheck            # Type check all TypeScript
-
-# Testing
-pnpm test                 # Run all tests
-pnpm --filter worker test # Run Python worker tests only
-pnpm --filter web test    # Run frontend tests only
+pnpm --filter web dev                      # Start frontend (http://localhost:3002)
+pnpm --filter api dev                      # Start API (http://localhost:3001)
+pnpm build                                 # Build everything
+pnpm lint                                  # Lint all packages
+pnpm typecheck                             # Type check all TypeScript
 
 # Database
-pnpm --filter api db:migrate  # Run migrations
-pnpm --filter api db:seed     # Seed with test data
+cd apps/api && npx prisma migrate dev      # Create + apply new migration
+cd apps/api && npx prisma migrate deploy   # Apply existing migrations (CI/prod)
+cd apps/api && npx prisma studio           # GUI database browser
 
 # Docker
-docker-compose up -d      # Start infrastructure
+docker-compose up -d      # Start infrastructure (PostgreSQL, Redis, MinIO)
 docker-compose down        # Stop infrastructure
 docker-compose down -v     # Stop and delete volumes (fresh start)
 
-# Python worker standalone
-cd apps/worker
-python -m pytest tests/    # Run worker tests
-python -c "from audio_analysis.pipeline import analyze; analyze('test.wav')"
+# Python worker
+cd apps/worker && source venv/bin/activate
+uvicorn main:app --reload --port 8001      # Start FastAPI worker
+celery -A worker worker --loglevel=info    # Start Celery background worker
+python -m pytest tests/                    # Run worker tests
 ```
 
 ---
