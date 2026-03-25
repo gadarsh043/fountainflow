@@ -572,3 +572,31 @@ This makes the project self-improving. Each development session benefits from al
 **If rebuilding, I would:** Write the page files first, extract component interfaces from their usage, then implement the components to match. Bottom-up interface design from call sites prevents mismatch rewrites.
 
 ---
+
+### 2026-03-25 — Blocker fixes (Session 3)
+
+**Context:** Found and fixed 4 integration blockers that prevented the app from running locally.
+
+**Bug 1 — Queue architecture mismatch:**
+NestJS used Bull queue but had no consumer. Python worker used Celery. They never spoke to each other.
+**Fix:** Added `JobsProcessor` (`@nestjs/bull` `@Processor`) that reads Bull jobs and HTTP-POSTs to Python worker FastAPI `POST /jobs/:id/process`. The worker then enqueues a Celery task and returns 202. Added `WORKER_URL` to NestJS config.
+**Rule:** When two services communicate via a queue, always verify BOTH the producer AND the consumer exist and speak the same protocol.
+
+**Bug 2 — Worker callback URL and payload mismatch:**
+Worker posted to `/jobs/{id}/progress` with no `status` field. NestJS listened at `/jobs/{id}/callback` and required `status: 'running'|'completed'|'failed'`.
+**Fix:** Changed `_post_progress` to post to `/callback`, added `status` kwarg, propagated result S3 keys in the completed callback.
+**Rule:** When an API route is the target of a webhook, verify the URL path AND the payload schema match from both ends before first run.
+
+**Bug 3 — S3 env var names:**
+`settings.py` field names (`aws_access_key_id`, `s3_endpoint_url`) didn't match `.env.example` (`S3_ACCESS_KEY`, `S3_ENDPOINT`). Pydantic Settings maps by field name → env var name exactly.
+**Fix:** Renamed fields to `s3_access_key`, `s3_secret_key`, `s3_endpoint` to match existing env var names.
+**Rule:** Both sides of any env → config mapping must be verified. Pydantic field `foo_bar` maps to env `FOO_BAR` (uppercase). Always test with a real `.env` file.
+
+**Bug 4 — `simulation_data_key` never set:**
+3D viewer loaded from `job.simulation_data_key`, but the worker never uploaded a separate simulation file and never set this field.
+**Fix:** Set `simulation_data_key = timeline_key` in the worker result (they're the same JSON). Frontend falls back to `timeline_key` when `simulation_data_key` is null.
+**Rule:** When a field is consumed by the frontend but produced by the backend, verify it's actually set. grep for the field name across both sides.
+
+**Brand colors update:** Changed from cyan `#00aaff` to deep blue `#185FA5` (primary) + coral `#D85A30` (accent). Updated tailwind.config.ts color scales, globals.css CSS variables, gradient utilities, and glow keyframes.
+
+---

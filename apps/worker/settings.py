@@ -56,14 +56,16 @@ class WorkerSettings(BaseSettings):
         description="Number of concurrent Celery worker processes",
     )
 
-    # --- AWS S3 ---
+    # --- S3 / MinIO storage ---
+    # Env var names match NestJS API and .env.example: S3_BUCKET, S3_REGION,
+    # S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT
     s3_bucket: str = Field(default="fountainflow-dev", description="S3 bucket name")
-    s3_region: str = Field(default="us-east-1", description="AWS region")
-    aws_access_key_id: str = Field(default="", description="AWS access key ID")
-    aws_secret_access_key: str = Field(default="", description="AWS secret access key")
-    s3_endpoint_url: str | None = Field(
+    s3_region: str = Field(default="us-east-1", description="AWS/MinIO region")
+    s3_access_key: str = Field(default="", description="S3 / MinIO access key (S3_ACCESS_KEY)")
+    s3_secret_key: str = Field(default="", description="S3 / MinIO secret key (S3_SECRET_KEY)")
+    s3_endpoint: str | None = Field(
         default=None,
-        description="Override S3 endpoint (e.g., for LocalStack). Leave empty for real AWS.",
+        description="Override S3 endpoint for MinIO/Cloudflare R2 (S3_ENDPOINT). Leave blank for real AWS.",
     )
 
     # --- Audio analysis ---

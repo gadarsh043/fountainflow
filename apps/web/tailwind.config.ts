@@ -51,19 +51,32 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        // FountainFlow brand colors
+        // FountainFlow brand colors — deep blue #185FA5 + coral #D85A30
         fountain: {
-          50: '#eff9ff',
-          100: '#def2ff',
-          200: '#b6e7ff',
-          300: '#75d6ff',
-          400: '#2cc3ff',
-          500: '#00aaff',
-          600: '#0087df',
-          700: '#006bb4',
-          800: '#005a94',
-          900: '#064b7a',
-          950: '#042f52',
+          50:  '#eaf2fb',
+          100: '#cfe3f5',
+          200: '#9ec7eb',
+          300: '#6daae0',
+          400: '#3d8dd5',
+          500: '#185FA5',  // primary brand blue
+          600: '#144f8a',
+          700: '#103e6e',
+          800: '#0c2e51',
+          900: '#081e35',
+          950: '#040f1b',
+        },
+        coral: {
+          50:  '#fdf3ef',
+          100: '#fae4da',
+          200: '#f4c6b0',
+          300: '#eda887',
+          400: '#e67d5b',
+          500: '#D85A30',  // accent coral
+          600: '#b54826',
+          700: '#91381d',
+          800: '#6e2a15',
+          900: '#4a1c0d',
+          950: '#260e06',
         },
       },
       borderRadius: {
@@ -93,8 +106,8 @@ const config: Config = {
           '50%': { transform: 'translateY(-8px)' },
         },
         glow: {
-          '0%, 100%': { boxShadow: '0 0 8px rgba(0,170,255,0.4)' },
-          '50%': { boxShadow: '0 0 24px rgba(0,170,255,0.8)' },
+          '0%, 100%': { boxShadow: '0 0 8px rgba(24,95,165,0.4)' },
+          '50%': { boxShadow: '0 0 24px rgba(24,95,165,0.8)' },
         },
       },
       animation: {
@@ -107,7 +120,8 @@ const config: Config = {
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'fountain-gradient': 'linear-gradient(135deg, #042f52 0%, #006bb4 50%, #00aaff 100%)',
+        'fountain-gradient': 'linear-gradient(135deg, #081e35 0%, #185FA5 60%, #3d8dd5 100%)',
+        'coral-gradient': 'linear-gradient(135deg, #D85A30 0%, #e67d5b 100%)',
         shimmer:
           'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%)',
       },

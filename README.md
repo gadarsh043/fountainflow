@@ -49,7 +49,7 @@ Fountain Config ─────────────────────�
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/your-org/fountainflow.git
+git clone https://github.com/gadarsh043/fountainflow.git
 cd fountainflow
 
 # Install Node dependencies

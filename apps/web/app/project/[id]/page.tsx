@@ -74,8 +74,9 @@ export default function ProjectPage() {
         pollRef.current = setTimeout(() => { void pollJob(job.job_id); }, 2000);
       }
 
-      if (job?.status === 'completed' && job.simulation_data_key) {
-        void fetchSimulationData(job.simulation_data_key);
+      const simKey = job?.simulation_data_key ?? job?.timeline_key;
+      if (job?.status === 'completed' && simKey) {
+        void fetchSimulationData(simKey);
       }
     } finally {
       setLoading(false);
@@ -91,8 +92,9 @@ export default function ProjectPage() {
 
       if (job.status === 'processing' || job.status === 'pending') {
         pollRef.current = setTimeout(() => { void pollJob(jobId); }, 2000);
-      } else if (job.status === 'completed' && job.simulation_data_key) {
-        void fetchSimulationData(job.simulation_data_key);
+      } else if (job.status === 'completed') {
+        const simKey = job.simulation_data_key ?? job.timeline_key;
+        if (simKey) void fetchSimulationData(simKey);
       }
     } catch {
       pollRef.current = setTimeout(() => { void pollJob(jobId); }, 5000);

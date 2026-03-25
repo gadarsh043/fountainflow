@@ -27,6 +27,9 @@ const configSchema = z.object({
   MAX_SONG_DURATION_SECONDS: z.coerce.number().default(2700),
   MAX_UPLOAD_SIZE_MB: z.coerce.number().default(200),
 
+  // Python worker URL
+  WORKER_URL: z.string().url().default('http://localhost:8001'),
+
   // Optional
   SENTRY_DSN: z.string().url().optional(),
 });

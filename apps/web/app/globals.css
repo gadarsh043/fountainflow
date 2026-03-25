@@ -4,33 +4,36 @@
 
 @layer base {
   :root {
-    --background: 222 47% 7%;
+    /* Background derived from fountain-950 */
+    --background: 214 56% 6%;
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 10%;
+    --card: 214 50% 9%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 10%;
+    --popover: 214 50% 9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 204 100% 50%;
-    --primary-foreground: 222 47% 7%;
+    /* Primary = deep blue #185FA5 → hsl(210, 75%, 37%) */
+    --primary: 210 75% 37%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 217 32% 17%;
+    --secondary: 214 40% 16%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217 32% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 214 40% 16%;
+    --muted-foreground: 215 20% 60%;
 
-    --accent: 204 100% 40%;
+    /* Accent = coral #D85A30 → hsl(15, 68%, 52%) */
+    --accent: 15 68% 52%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62% 50%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217 32% 20%;
-    --input: 217 32% 17%;
-    --ring: 204 100% 50%;
+    --border: 214 35% 18%;
+    --input: 214 40% 16%;
+    --ring: 210 75% 37%;
 
     --radius: 0.5rem;
   }
@@ -67,7 +70,14 @@
 
 @layer utilities {
   .text-gradient {
-    background: linear-gradient(135deg, #00aaff, #75d6ff, #ffffff);
+    background: linear-gradient(135deg, #185FA5, #6daae0, #ffffff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-coral {
+    background: linear-gradient(135deg, #D85A30, #e67d5b);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -81,11 +91,15 @@
   }
 
   .glow-blue {
-    box-shadow: 0 0 20px rgba(0, 170, 255, 0.3), 0 0 40px rgba(0, 170, 255, 0.1);
+    box-shadow: 0 0 20px rgba(24, 95, 165, 0.4), 0 0 40px rgba(24, 95, 165, 0.15);
   }
 
   .glow-blue-sm {
-    box-shadow: 0 0 8px rgba(0, 170, 255, 0.4);
+    box-shadow: 0 0 8px rgba(24, 95, 165, 0.5);
+  }
+
+  .glow-coral {
+    box-shadow: 0 0 20px rgba(216, 90, 48, 0.4), 0 0 40px rgba(216, 90, 48, 0.15);
   }
 
   .no-scrollbar::-webkit-scrollbar {
@@ -103,7 +117,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  background: radial-gradient(ellipse at center, #042f52 0%, #020d1a 70%);
+  background: radial-gradient(ellipse at center, #0c2e51 0%, #040f1b 70%);
 }
 
 /* Loading skeleton */

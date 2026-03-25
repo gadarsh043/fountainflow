@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { JobsController } from './jobs.controller';
 import { JobsService, FOUNTAIN_JOB_QUEUE } from './jobs.service';
 import { JobsGateway } from './jobs.gateway';
+import { JobsProcessor } from './jobs.processor';
 import { ProjectsModule } from '../projects/projects.module';
 import type { AppConfig } from '../config/configuration';
 
@@ -35,7 +36,7 @@ import type { AppConfig } from '../config/configuration';
     ProjectsModule,
   ],
   controllers: [JobsController],
-  providers: [JobsService, JobsGateway],
+  providers: [JobsService, JobsGateway, JobsProcessor],
   exports: [JobsService, JobsGateway],
 })
 export class JobsModule {}
