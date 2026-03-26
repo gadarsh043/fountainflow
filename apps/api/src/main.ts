@@ -3,7 +3,6 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import {
   Logger,
   ClassSerializerInterceptor,
-  ValidationPipe,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IoAdapter } from '@nestjs/platform-socket.io';
@@ -77,17 +76,6 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api', {
     exclude: ['health', 'health/info'],
   });
-
-  // ── Global Pipes ────────────────────────────────────────────────────────────
-  // NestJS built-in validation pipe for class-validator (if used anywhere)
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: false, // Zod handles this for our DTOs
-      transform: true,
-      disableErrorMessages: isProd,
-    }),
-  );
 
   // ── Global Interceptors ────────────────────────────────────────────────────
   const reflector = app.get(Reflector);

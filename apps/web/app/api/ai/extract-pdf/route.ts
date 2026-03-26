@@ -14,7 +14,7 @@ const PYTHON = join(process.cwd(), '../../apps/worker/venv/bin/python3');
 // resolution, rotates to landscape, and runs tesseract OCR at 0° and 180° to capture
 // labels on both sides of the fountain pool centerline.
 const EXTRACT_SCRIPT = `
-import sys, fitz, json, io, subprocess, tempfile, os
+import sys, fitz, json, io, subprocess, tempfile, os, base64
 from PIL import Image
 
 path = sys.argv[1]
@@ -26,7 +26,7 @@ for page in doc:
     pages_text.append(page.get_text().strip())
 text = "\\n".join(pages_text).strip()
 if text:
-    print(json.dumps({"text": text, "pages": len(doc)}))
+    print(json.dumps({"text": text, "pages": len(doc), "preview_image": ""}))
     sys.exit(0)
 
 # --- Step 2: image-only PDF — OCR each embedded image ---
@@ -53,6 +53,7 @@ def ocr_image(img, angle):
 
 ocr_parts = []
 seen_xrefs = set()
+preview_img = None  # Store the first processed image for the UI preview
 
 for page in doc:
     img_list = page.get_images(full=True)
@@ -68,6 +69,9 @@ for page in doc:
             w, h = img.size
             if h > w:
                 img = img.rotate(-90, expand=True)
+            # Capture the first image as the preview (after rotation)
+            if preview_img is None:
+                preview_img = img.copy()
             # OCR at 0° (for top-side labels and dimension numbers)
             t0 = ocr_image(img, 0)
             # OCR at 180° (for bottom-side labels in landscape CAD drawings)
@@ -84,14 +88,26 @@ if not ocr_parts:
         mat = fitz.Matrix(300/72, 300/72)
         pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB)
         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        if preview_img is None:
+            preview_img = img.copy()
         t0 = ocr_image(img, 0)
         t180 = ocr_image(img, 180)
         combined = t0 + "\\n" + t180
         if combined.strip():
             ocr_parts.append(combined)
 
+# Build preview image — resize to max 800px wide, JPEG quality 75
+preview_b64 = ""
+if preview_img is not None:
+    pw, ph = preview_img.size
+    if pw > 800:
+        preview_img = preview_img.resize((800, int(ph * 800 / pw)), Image.LANCZOS)
+    buf = io.BytesIO()
+    preview_img.save(buf, "JPEG", quality=75)
+    preview_b64 = base64.b64encode(buf.getvalue()).decode()
+
 all_text = "\\n\\n".join(ocr_parts)
-print(json.dumps({"text": all_text, "pages": len(doc)}))
+print(json.dumps({"text": all_text, "pages": len(doc), "preview_image": preview_b64}))
 `;
 
 export async function POST(req: NextRequest) {
@@ -112,7 +128,7 @@ export async function POST(req: NextRequest) {
       timeout: 120_000,
     });
 
-    const result = JSON.parse(stdout) as { text: string; pages: number };
+    const result = JSON.parse(stdout) as { text: string; pages: number; preview_image?: string };
 
     if (!result.text.trim()) {
       return NextResponse.json(
@@ -121,7 +137,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ text: result.text, pages: result.pages, source: 'ocr' });
+    return NextResponse.json({
+      text: result.text,
+      pages: result.pages,
+      preview_image: result.preview_image ?? '',
+      source: 'ocr',
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to extract PDF';
     return NextResponse.json({ error: message }, { status: 500 });
