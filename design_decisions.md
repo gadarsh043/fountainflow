@@ -176,3 +176,42 @@ Every non-obvious technical choice is documented here with the reasoning. When f
 - **Collaborative editing:** Should multiple team members edit the same show? Deferred to v2.
 - **Offline mode:** Should the 3D simulation work offline (PWA)? Deferred to v2.
 - **Custom choreography patterns:** Should users be able to create and share their own pattern templates? Deferred to v2.
+
+---
+
+## DD-013: Tesseract OCR over vision LLM (llava) for PDF blueprint reading
+
+**Decision:** Use tesseract OCR (system binary) for extracting text from image-only CAD blueprint PDFs. Do NOT use llava or other vision LLMs for this task.
+
+**Why not llava?** llava 7B was tested on the example fountain blueprint (100×30 ft CAD drawing). With the image at 150 DPI, llava returned empty category headers with no content. At 2× resolution, same result. llava 7B cannot reliably read small rotated text in CAD dimension annotations — it's a vision model optimized for natural-language image understanding, not precision OCR of technical drawings.
+
+**Why tesseract?** Tesseract is designed for exactly this — printed/rendered text recognition. On the same blueprint images, tesseract at 180° rotation produces clean, accurate output: nozzle names, dimension numbers, and equipment labels all read correctly.
+
+**The dual-rotation trick:** CAD blueprints place labels on both sides of the fountain centerline. In a landscape-oriented blueprint, some labels are upright and some are upside-down. Running tesseract at 0° and then 180° captures both sets. Combining the outputs gives a complete text inventory.
+
+**Implementation details:**
+- Extract native embedded JPEGs from PDF using `fitz.extract_image()` (not rendered pages)
+- Auto-rotate portrait images to landscape (blueprint was stored portrait, fountain is landscape)
+- Resize to max 2500px on the long side for speed/quality balance
+- Run `tesseract ... --psm 11` (sparse text mode) at 0° and 180°
+- Fall back to 300 DPI page rendering if no embedded images exist
+- The combined OCR text is passed to qwen2.5:14b which maps it to structured nozzle coordinates
+
+**Tradeoff:** Requires tesseract to be installed on the system running the Next.js server. Not needed for text PDFs or DOCX files.
+
+---
+
+## DD-014: Ollama local LLM for nozzle extraction (no cloud API dependency)
+
+**Decision:** Use Ollama running locally (qwen2.5:14b for text, no vision model needed) for nozzle extraction from blueprint text. Do not require an Anthropic or OpenAI API key.
+
+**Why Ollama?** The target users are fountain companies who may not have cloud API subscriptions. Running Ollama locally means:
+- No per-request API cost
+- No data leaves the machine (relevant for proprietary fountain designs)
+- Works offline
+
+**Why qwen2.5:14b?** Tested against the Maker Associates blueprint + spec sheet combination. It reliably produces a bare JSON array of nozzle objects when instructed to. It correctly processes the dimension numbers from OCR text and calculates center-relative Y positions.
+
+**Critical note — no `format:"json"`:** Setting Ollama's `format:"json"` causes qwen2.5:14b to return a single object instead of an array. Always omit this parameter when requesting a JSON array. Extract the `[...]` array from the raw response using regex `/\[[\s\S]*\]/`.
+
+**Performance:** qwen2.5:14b takes 60–120 seconds on Apple Silicon (M-series, 18 GB RAM). This is acceptable for a one-time import operation. On systems with dedicated GPU, this will be faster.

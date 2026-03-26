@@ -30,6 +30,7 @@ export default function NewProjectPage() {
   async function handleConfigComplete(config: FountainConfig, name: string) {
     setFountainConfig(config);
     setProjectName(name);
+    setError(null);
 
     // Create the project
     try {
@@ -38,9 +39,22 @@ export default function NewProjectPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, fountain_config: config }),
       });
-      if (!res.ok) throw new Error('Failed to create project');
-      const data = (await res.json()) as { id: string };
-      setProjectId(data.id);
+
+      const data = (await res.json()) as {
+        id?: string;
+        message?: string;
+        errors?: Array<{ field: string; message: string }>;
+      };
+
+      if (!res.ok) {
+        if (data.errors?.length) {
+          const msgs = data.errors.map((e) => `${e.field}: ${e.message}`).join(' · ');
+          throw new Error(msgs);
+        }
+        throw new Error(data.message ?? 'Failed to create project');
+      }
+
+      setProjectId(data.id!);
       setCurrentStep('upload');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project');

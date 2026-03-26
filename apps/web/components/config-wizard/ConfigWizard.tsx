@@ -2,26 +2,34 @@
 
 import { useState } from 'react';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
-import { FOUNTAIN_PRESETS, type FountainPreset, type TargetPlatform, type FountainConfig } from '@fountainflow/shared';
+import {
+  FOUNTAIN_PRESETS,
+  type FountainPreset,
+  type TargetPlatform,
+  type FountainConfig,
+  type NozzleType,
+  type NozzleConfig,
+} from '@fountainflow/shared';
 import { PresetSelector } from './PresetSelector';
 import { PlatformSelector } from './PlatformSelector';
 import { NozzleForm } from './NozzleForm';
+import { PdfImportButton } from './PdfImportButton';
+import type { ParsedNozzle } from '@/app/api/ai/parse-fountain/route';
 
-interface Nozzle {
+// Flat nozzle format used in the wizard UI
+interface WizardNozzle {
   id: string;
-  type: string;
+  type: NozzleType;
   position_x: number;
   position_y: number;
   max_height_ft: number;
 }
 
 interface ConfigWizardProps {
-  /** Called when the user completes all config steps. Page is responsible for project creation. */
   onComplete: (config: FountainConfig, name: string) => void;
 }
 
 type Step = 'preset' | 'nozzles' | 'platform' | 'name';
-
 const STEPS: Step[] = ['preset', 'nozzles', 'platform', 'name'];
 const STEP_LABELS: Record<Step, string> = {
   preset: 'Choose a preset',
@@ -30,22 +38,57 @@ const STEP_LABELS: Record<Step, string> = {
   name: 'Project name',
 };
 
+/** Convert a shared NozzleConfig (with positions array) to wizard flat format */
+function toWizardNozzle(n: NozzleConfig, index: number): WizardNozzle {
+  const pos = n.positions?.[0];
+  return {
+    id: n.id ?? `nozzle_${index}`,
+    type: n.type,
+    position_x: pos?.x ?? 0,
+    position_y: pos?.y ?? 0,
+    max_height_ft: n.max_height_ft,
+  };
+}
+
+/** Convert wizard flat nozzle back to NozzleConfig for the API */
+function toNozzleConfig(n: WizardNozzle): NozzleConfig {
+  return {
+    id: n.id,
+    type: n.type,
+    count: 1,
+    max_height_ft: n.max_height_ft,
+    positions: [{ x: n.position_x, y: n.position_y }],
+  };
+}
+
 export function ConfigWizard({ onComplete }: ConfigWizardProps) {
   const [step, setStep] = useState<Step>('preset');
-  const [selectedPreset, setSelectedPreset] = useState<FountainPreset | null>(null);
-  const [nozzles, setNozzles] = useState<Nozzle[]>([]);
+  const [selectedPreset, setSelectedPreset] = useState<FountainPreset | null | ''>(null);
+  const [nozzles, setNozzles] = useState<WizardNozzle[]>([]);
   const [platforms, setPlatforms] = useState<TargetPlatform[]>(['arduino_mega']);
   const [projectName, setProjectName] = useState('');
 
   const stepIndex = STEPS.indexOf(step);
 
-  function applyPreset(preset: FountainPreset | null) {
+  function applyPreset(preset: FountainPreset | '' | null) {
     setSelectedPreset(preset);
-    if (preset && FOUNTAIN_PRESETS[preset]) {
-      const config = FOUNTAIN_PRESETS[preset];
-      const configNozzles = (config as Record<string, unknown>)?.nozzles as Nozzle[] | undefined;
-      setNozzles(configNozzles ?? []);
+    if (preset && FOUNTAIN_PRESETS[preset as FountainPreset]) {
+      const config = FOUNTAIN_PRESETS[preset as FountainPreset];
+      setNozzles((config.nozzles as NozzleConfig[]).map(toWizardNozzle));
     }
+  }
+
+  function handlePdfImport(parsed: ParsedNozzle[]) {
+    const mapped: WizardNozzle[] = parsed.map((n, i) => ({
+      id: `pdf_${i}`,
+      type: 'center_jet' as NozzleType,
+      position_x: n.position_x,
+      position_y: n.position_y,
+      max_height_ft: n.max_height_ft,
+    }));
+    setNozzles(mapped);
+    setSelectedPreset(null);
+    setStep('nozzles');
   }
 
   function canAdvance() {
@@ -69,20 +112,27 @@ export function ConfigWizard({ onComplete }: ConfigWizardProps) {
   function handleSubmit() {
     if (!canAdvance()) return;
 
-    const baseConfig = selectedPreset && FOUNTAIN_PRESETS[selectedPreset]
-      ? FOUNTAIN_PRESETS[selectedPreset]
-      : {
-          id: 'custom',
-          name: projectName,
-          dimensions: { width_ft: 50, length_ft: 30, depth_ft: 3 },
-          pumps: [],
-          valves: [],
-          leds: { count: 0 },
-        };
+    const presetConfig = selectedPreset ? FOUNTAIN_PRESETS[selectedPreset as FountainPreset] ?? null : null;
 
     const fountainConfig: FountainConfig = {
-      ...(baseConfig as FountainConfig),
-      nozzles: nozzles as FountainConfig['nozzles'],
+      id: presetConfig ? (presetConfig as unknown as FountainConfig).id ?? 'custom' : 'custom',
+      name: presetConfig?.name ?? projectName,
+      dimensions: presetConfig?.dimensions ?? { length_ft: 30, width_ft: 20, depth_ft: 2 },
+      pumps: presetConfig?.pumps ?? [],
+      valves: presetConfig?.valves ?? {
+        count: 0,
+        min_cycle_ms: 200,
+        min_close_time_large_pipe_ms: 300,
+        max_frequency_hz: 5,
+      },
+      leds: presetConfig?.leds ?? {
+        count: 0,
+        type: 'rgb',
+        channels_per_fixture: 3,
+        dmx_channel_start: 1,
+        dmx_universe: 1,
+      },
+      nozzles: nozzles.map(toNozzleConfig),
       target_platform: platforms[0] ?? 'arduino_mega',
     };
 
@@ -129,13 +179,17 @@ export function ConfigWizard({ onComplete }: ConfigWizardProps) {
             <div>
               <h2 className="text-lg font-semibold">Choose a fountain preset</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Start from a pre-configured layout or build your own from scratch.
+                Start from a pre-configured layout, import from a PDF blueprint, or build from scratch.
               </p>
             </div>
             <PresetSelector
               selected={selectedPreset}
               onSelect={(p) => applyPreset(p || null)}
             />
+            <div className="pt-2">
+              <p className="text-xs text-muted-foreground mb-2">Or import from your own design document:</p>
+              <PdfImportButton onImport={handlePdfImport} />
+            </div>
           </div>
         )}
 

@@ -225,11 +225,38 @@ Requires WebGL 2.0 and Web Audio API:
 
 ## 7. Known bugs and workarounds (to be updated during development)
 
-_This section will be populated as bugs are discovered during development. Format:_
+### BUG-001: NestJS DTO rejected valid FountainConfig (project creation always returned 400)
+**Status:** Fixed 2026-03-25
+**Workaround:** N/A (fixed)
+**Root cause:** `create-project.dto.ts` used wrong nozzle type enum values (`jet/fan/ring` instead of `center_jet/high_jet` etc.), `max_height_m` instead of `max_height_ft`, and `position: {x,y,z}` instead of `positions: [{x,y}]` — schema did not match `@fountainflow/shared` types.
 
-```
-### BUG-XXX: [short description]
-**Status:** Open / Fixed in [commit]
-**Workaround:** [if any]
-**Root cause:** [if known]
-```
+### BUG-002: pdfjs-dist v5 crashes Next.js webpack (both RSC and client-side bundlers)
+**Status:** Fixed 2026-03-26 — moved PDF extraction to server-side Python
+**Workaround:** N/A (fixed)
+**Root cause:** pdfjs-dist v5 uses ESM with `Object.defineProperty` on its exports object, which crashes Next.js webpack's module processing. Client-side dynamic import with CDN URL also failed (version not on cdnjs). Final fix: PDF text extraction runs server-side via Python (pymupdf + tesseract) through a Next.js API route, no browser-side PDF library needed.
+
+### BUG-003: llava vision model cannot read CAD blueprint text
+**Status:** Fixed 2026-03-26 — replaced with tesseract OCR
+**Workaround:** N/A (fixed)
+**Root cause:** llava 7B is not accurate enough for small rotated text in CAD dimension annotations. Returned empty category headers. Replaced with tesseract OCR at 0° + 180° rotations which correctly extracts all nozzle names and dimension numbers.
+
+### BUG-004: Ollama qwen2.5:14b returns single object when `format:"json"` is set
+**Status:** Fixed 2026-03-26
+**Workaround:** Remove `format:"json"` from Ollama request; extract JSON array from response with regex `/\[[\s\S]*\]/`
+**Root cause:** With `format:"json"`, qwen2.5:14b interprets the JSON constraint as "return a JSON object" and wraps the first nozzle in an object. Without the format constraint, the model correctly returns an array when instructed to start with `[`.
+
+### 8. PDF blueprint import limitations
+
+The PDF/DOCX blueprint import feature has specific requirements and limitations:
+
+**Requirements:**
+- **tesseract** must be installed on the server machine (`brew install tesseract` on macOS)
+- **Ollama** must be running locally with **qwen2.5:14b** downloaded
+- Both are optional — text DOCX import works without them
+
+**Limitations:**
+- Image-only PDFs work best when the blueprint uses standard CAD label placement (nozzle names near elements, dimension lines with numbers)
+- AI-extracted positions are **estimates** — always review the nozzle table before confirming
+- OCR quality depends on the PDF's image resolution; low-resolution scans (<150 DPI) may produce garbled text
+- Very complex blueprints with dense overlapping labels may confuse the AI's position calculation
+- qwen2.5:14b takes 60–120 seconds on Apple Silicon (M2/M3 with 18 GB RAM) — this is expected

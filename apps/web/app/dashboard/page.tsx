@@ -89,11 +89,11 @@ export default function DashboardPage() {
             Try again
           </button>
         </div>
-      ) : projects.length === 0 ? (
+      ) : projects?.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
+          {projects?.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}
         </div>

@@ -174,6 +174,11 @@ After completing each major component, append a section to this file:
 
 This creates institutional memory for future development sessions.
 
+### 3.5 Self-testing
+
+After completing each major component or bug, always run the code do curl commands and after the page or component run then notify the user
+This creates a satisfying result for the user
+
 ---
 
 ## 4. Coding standards
@@ -644,3 +649,34 @@ Exporting `getQueueToken(QUEUE_NAME)` string directly in `exports[]` throws "not
 - Next.js runs in foreground (last) so terminal output is visible to user
 
 ---
+
+### 2026-03-26 — Blueprint PDF import: tesseract OCR replaces llava (Session 5)
+
+**Context:** PDF blueprint import was failing — llava returned empty category headers instead of nozzle names/coordinates.
+
+**Problem 1 — llava cannot read CAD blueprints reliably:**
+The fountain blueprint is an image-only PDF with 2 embedded JPEGs (4754×7352 and 4754×2559 px). When rendered at 150 DPI and sent to llava 7B, the model returned empty structured responses ("1. Nozzle names:\n2. Equipment names:") with no actual content. Root cause: llava 7B is not reliable for small rotated technical text in CAD drawings.
+**Fix:** Replaced llava entirely with tesseract OCR. Extract the embedded JPEGs at native resolution, rotate to landscape (blueprint was portrait = rotated 90°), run tesseract at 0° AND 180° (CAD drawings have labels on both sides of the pool centerline), combine both OCR passes. The 180° pass cleanly reads: "REVOLVING FOUNTAIN", "12'RING", "10'RING", "PEACOCK TAIL", "CORNER JET", "RISING SUN", "MIST LINE", "BUTTER FLY FOUNTAIN", and dimension spacings "10'-5"", "9'-7"", "6'-5½"", "14'-6"", "15'-6"", "85'".
+**Rule:** For CAD/technical drawings, tesseract OCR at multiple rotations is far superior to vision LLMs. Vision models (llava 7B) struggle with rotated small text and dimension annotations. Tesseract at 0° + 180° covers both sides of symmetric drawings.
+
+**Problem 2 — Rendering PDF at 150 DPI loses resolution:**
+The original code used `fitz.Matrix(150/72, 150/72)` to render pages as images. But the embedded JPEGs were already at full native resolution (4754px wide). Rendering introduced unnecessary quality loss.
+**Fix:** Use `doc.extract_image(xref)` to get the native JPEG bytes directly, bypassing rendering entirely. For PDFs with no embedded images, fall back to 300 DPI rendering.
+**Rule:** For image-only PDFs, always try `extract_image()` first to get native resolution. Only fall back to `get_pixmap()` rendering when there are no embedded images.
+
+**Problem 3 — qwen2.5:14b with `format:"json"` returns single object not array:**
+When Ollama's `format:"json"` is set, qwen2.5:14b returns a single object (the first nozzle) instead of an array. Removing `format:"json"` and extracting the array with regex `/\[[\s\S]*\]/` reliably produces the full array.
+**Rule:** NEVER set `format:"json"` when asking qwen2.5:14b for a JSON array. Let the model output freely, then extract the `[...]` array with regex.
+
+**Problem 4 — parse-fountain prompt had no instructions for reading blueprint dimensions:**
+The system prompt said "distribute symmetrically at reasonable positions" which led to guessed positions. The blueprint OCR contains actual dimension numbers (spacings between columns).
+**Fix:** Updated system prompt to explain: dimension numbers are spacings between nozzle columns; add cumulatively from one end; subtract half-length to get center-relative Y coordinates. Also added example calculation.
+**Rule:** When the input contains measurable data (dimension numbers), the system prompt must explain how to use that data for calculations — not just rely on the model's general knowledge.
+
+**Key insight — OCR at multiple rotations for CAD:**
+CAD blueprints have labels on both sides of the centerline. Rotating the image and running OCR again catches labels that were upside-down in the first pass. For a fountain blueprint:
+- 0° pass: captures dimension numbers at top, some labels
+- 180° pass: captures labels that were upside-down (REVOLVING FOUNTAIN, CORNER JET, etc.)
+- Combine both: complete picture
+
+**If rebuilding, I would:** Skip llava for blueprint reading entirely and go straight to tesseract + multi-rotation OCR. Reserve llava/vision models for tasks like "what type of fountain is shown in this photo" (classification), not precision text extraction from CAD drawings.

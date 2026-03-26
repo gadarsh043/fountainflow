@@ -69,6 +69,8 @@ Fountain Config ─────────────────────�
 - **Python 3.11** (exact — madmom requires 3.11)
 - **Docker Desktop** running
 - **FFmpeg** on PATH (`brew install ffmpeg` / `apt install ffmpeg`)
+- **tesseract** on PATH (`brew install tesseract`) — for PDF blueprint import
+- **Ollama** with `qwen2.5:14b` — for AI-powered blueprint import (optional but recommended)
 
 ### 1. Clone and install Node dependencies
 
@@ -211,6 +213,10 @@ cd apps/worker && source venv/bin/activate
 uvicorn main:app --reload --port 8001    # FastAPI dev server
 celery -A worker worker --loglevel=info  # Celery background worker
 python -m pytest tests/                  # Run worker tests
+
+# ── AI blueprint import (optional) ─────────────────────────────────────────
+ollama serve                       # Start Ollama on port 11434
+ollama pull qwen2.5:14b            # Download text model (~9 GB, one-time)
 ```
 
 ---

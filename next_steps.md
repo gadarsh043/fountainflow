@@ -35,6 +35,38 @@ node --version     # Should show v20+
 pnpm --version     # Should show 9+
 ```
 
+### 1.2a Install Ollama + AI models (for PDF blueprint import feature)
+
+The PDF/DOCX blueprint import feature uses Ollama locally. Without it, text DOCX import still works but image-only PDF blueprints won't produce nozzle coordinates.
+
+```bash
+# macOS
+brew install ollama
+ollama serve &          # Start the Ollama server (runs on port 11434)
+ollama pull qwen2.5:14b # ~9 GB download — text analysis model
+# llava is no longer needed (replaced with tesseract OCR)
+```
+
+**Verify Ollama:**
+```bash
+curl http://localhost:11434/api/tags  # Should list downloaded models
+```
+
+### 1.2b Install tesseract OCR (for image-only PDF blueprints)
+
+Required for extracting text from CAD blueprint PDFs that contain scanned images instead of text layers.
+
+```bash
+# macOS
+brew install tesseract
+
+# Ubuntu/Debian
+sudo apt install tesseract-ocr
+
+# Verify
+tesseract --version  # Should show 4.x or 5.x
+```
+
 ### 1.3 Create .env file
 
 ```bash

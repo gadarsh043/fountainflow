@@ -3,24 +3,29 @@
 import { FOUNTAIN_PRESETS, type FountainPreset } from '@fountainflow/shared';
 
 interface PresetSelectorProps {
-  selected: FountainPreset | null;
-  onSelect: (preset: FountainPreset) => void;
+  selected: FountainPreset | null | '';
+  onSelect: (preset: FountainPreset | '') => void;
 }
 
+const PRESET_DISPLAY_NAMES: Record<string, string> = {
+  maker_associates_100x30: 'Theatrical 100×30',
+  municipal_50x20: 'Municipal 50×20',
+  small_garden_15x10: 'Garden 15×10',
+  hobbyist_5_nozzle: 'Hobbyist 5-Nozzle',
+};
+
 const PRESET_DESCRIPTIONS: Record<string, string> = {
-  maker_associates_100x30: '100×30 ft · 24 nozzles · theatrical scale',
-  municipal_50x20: '50×20 ft · 12 nozzles · park installation',
-  rooftop_garden_20x20: '20×20 ft · 6 nozzles · compact venue',
-  hotel_atrium_circular: 'Circular 30 ft · ring fountain pattern',
-  competition_stage_80x40: '80×40 ft · 36 nozzles · event stage',
+  maker_associates_100x30: '100×30 ft · 10 nozzle groups · theatrical scale',
+  municipal_50x20: '50×20 ft · 4 nozzle groups · park installation',
+  small_garden_15x10: '15×10 ft · 3 nozzle groups · compact venue',
+  hobbyist_5_nozzle: '6×4 ft · 2 nozzle groups · DIY / home use',
 };
 
 const PRESET_ICONS: Record<string, string> = {
   maker_associates_100x30: '🏟️',
   municipal_50x20: '🌳',
-  rooftop_garden_20x20: '🌿',
-  hotel_atrium_circular: '💧',
-  competition_stage_80x40: '🎭',
+  small_garden_15x10: '🌿',
+  hobbyist_5_nozzle: '💧',
 };
 
 export function PresetSelector({ selected, onSelect }: PresetSelectorProps) {
@@ -42,8 +47,8 @@ export function PresetSelector({ selected, onSelect }: PresetSelectorProps) {
             ].join(' ')}
           >
             <div className="text-2xl mb-3">{PRESET_ICONS[preset] ?? '⛲'}</div>
-            <p className="font-medium text-sm capitalize">
-              {preset.replace(/_/g, ' ')}
+            <p className="font-medium text-sm">
+              {PRESET_DISPLAY_NAMES[preset] ?? preset.replace(/_/g, ' ')}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {PRESET_DESCRIPTIONS[preset] ?? 'Fountain configuration'}
