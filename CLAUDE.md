@@ -12,7 +12,22 @@ This file is the operating manual for Claude Code working on this project. It en
 
 ---
 
-## 2. Repository structure
+## 2. Build status
+
+| Phase | Status |
+|-------|--------|
+| Phase 0 — Monorepo scaffolding | ✅ Complete |
+| Phase 1 — Python worker: audio analysis | ✅ Complete |
+| Phase 2 — Python worker: choreography + code generation | ✅ Complete |
+| Phase 3 — NestJS API | ✅ Complete |
+| Phase 4 — Next.js frontend + 3D simulation | ✅ Complete |
+| Phase 5 — Production deployment | 🔜 Not started |
+
+**To run everything:** `npm run fountainflow` from the repo root.
+
+---
+
+## 3. Repository structure
 
 ```
 fountainflow/
@@ -117,7 +132,7 @@ fountainflow/
 
 ---
 
-## 3. How to work autonomously
+## 4. How to work autonomously
 
 ### 3.1 Before starting any task
 
@@ -598,5 +613,34 @@ Worker posted to `/jobs/{id}/progress` with no `status` field. NestJS listened a
 **Rule:** When a field is consumed by the frontend but produced by the backend, verify it's actually set. grep for the field name across both sides.
 
 **Brand colors update:** Changed from cyan `#00aaff` to deep blue `#185FA5` (primary) + coral `#D85A30` (accent). Updated tailwind.config.ts color scales, globals.css CSS variables, gradient utilities, and glow keyframes.
+
+---
+
+### 2026-03-25 — Startup script + docs update (Session 4)
+
+**Context:** All 5 phases complete. Added `npm run fountainflow` one-command startup and updated all docs.
+
+**Problem: `node_modules/.bin/` shell wrappers can't be executed with `node` directly.**
+Shell scripts in `.bin/` use `basedir=$(dirname ...)` bash syntax that throws a JS syntax error when passed to `node`.
+**Fix:** Use the underlying JS entry point directly: `node node_modules/@nestjs/cli/bin/nest.js start` and `node node_modules/next/dist/bin/next dev`.
+**Rule:** Never run `node node_modules/.bin/<name>` — always use the actual `.js` file path or invoke via `bash`/`sh`.
+
+**Problem: `apps/web/.env.local` was missing — Clerk threw "Missing publishableKey" error.**
+Next.js doesn't inherit the monorepo root `.env`. It only looks in its own directory.
+**Fix:** Symlink `apps/web/.env.local → root/.env`. Same pattern as `apps/api/.env`.
+**Rule:** Every Next.js app in a monorepo needs its own `.env.local` (symlink is fine).
+
+**Problem: `BullModule.registerQueueAsync` token not exportable via `getQueueToken()`.**
+Exporting `getQueueToken(QUEUE_NAME)` string directly in `exports[]` throws "not part of this module" at runtime.
+**Fix:** Export `BullModule` itself (the module that registered the queue) — NestJS re-exports all providers from it.
+**Rule:** To share a Bull queue across NestJS modules, add `BullModule` to the exporting module's `exports[]`, not the token string.
+
+**Startup script design:**
+- Background processes (API, worker, Celery) are started with `&`, PIDs written to `.pids` file
+- `trap cleanup INT TERM EXIT` ensures all background processes are killed on Ctrl+C
+- API readiness is polled (up to 20s) before starting dependent services
+- Full paths used throughout (`$ROOT/apps/worker/venv/bin/uvicorn`) to avoid PATH issues
+- Logs redirected to `logs/api.log`, `logs/worker.log`, `logs/celery.log` for debugging
+- Next.js runs in foreground (last) so terminal output is visible to user
 
 ---

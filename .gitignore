@@ -1,3 +1,7 @@
+# Runtime
+logs/
+.pids
+
 # Dependencies
 node_modules/
 .pnp

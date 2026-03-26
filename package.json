@@ -2,6 +2,7 @@
   "name": "fountainflow",
   "private": true,
   "scripts": {
+    "fountainflow": "bash start.sh",
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
