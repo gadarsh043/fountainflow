@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
-const API_BASE = process.env.API_URL ?? 'http://localhost:3001';
+const API_BASE = process.env.API_URL ?? 'http://localhost:3001/api';
 
 export async function GET() {
   const { getToken } = auth();

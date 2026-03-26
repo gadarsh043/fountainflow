@@ -4,13 +4,11 @@ import {
   Music,
   Cpu,
   Play,
-  Download,
   Zap,
   Waves,
   Code2,
   ArrowRight,
   Star,
-  Check,
   ChevronRight,
 } from 'lucide-react';
 
@@ -83,55 +81,6 @@ const PLATFORMS = [
   { name: 'Modbus RTU', icon: '🔌', description: 'Industrial controller' },
 ] as const;
 
-const PRICING = [
-  {
-    name: 'Hobbyist',
-    price: 'Free',
-    period: 'forever',
-    description: 'Perfect for home fountain projects',
-    features: [
-      '3 projects',
-      'Songs up to 5 minutes',
-      'Arduino & JSON export',
-      '3D preview',
-      'Community support',
-    ],
-    cta: 'Get Started Free',
-    highlighted: false,
-  },
-  {
-    name: 'Professional',
-    price: '$29',
-    period: 'per month',
-    description: 'For fountain designers and installers',
-    features: [
-      'Unlimited projects',
-      'Songs up to 60 minutes',
-      'All export formats',
-      'Priority processing',
-      'Email support',
-      'Custom preset templates',
-    ],
-    cta: 'Start Free Trial',
-    highlighted: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    period: 'contact us',
-    description: 'For large commercial fountain systems',
-    features: [
-      'Unlimited everything',
-      'On-premise deployment',
-      'Custom hardware integrations',
-      'SLA guarantee',
-      'Dedicated support',
-      'API access',
-    ],
-    cta: 'Contact Sales',
-    highlighted: false,
-  },
-] as const;
 
 export default function LandingPage() {
   return (
@@ -153,9 +102,6 @@ export default function LandingPage() {
             </Link>
             <Link href="#platforms" className="hover:text-foreground transition-colors">
               Platforms
-            </Link>
-            <Link href="#pricing" className="hover:text-foreground transition-colors">
-              Pricing
             </Link>
           </div>
 
@@ -353,83 +299,6 @@ export default function LandingPage() {
                     <h3 className="font-semibold">{platform.name}</h3>
                     <p className="text-sm text-muted-foreground">{platform.description}</p>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Pricing */}
-        <section id="pricing" className="px-4 py-24">
-          <div className="container">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold md:text-4xl">
-                Simple, transparent <span className="text-gradient">pricing</span>
-              </h2>
-              <p className="mt-4 text-muted-foreground">
-                Start free. Upgrade when you need more projects or export formats.
-              </p>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
-              {PRICING.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`relative rounded-2xl p-8 flex flex-col ${
-                    plan.highlighted
-                      ? 'bg-fountain-500/15 border border-fountain-500/50 glow-blue'
-                      : 'glass'
-                  }`}
-                >
-                  {plan.highlighted && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-fountain-500 px-4 py-1 text-xs font-semibold text-white">
-                      Most Popular
-                    </div>
-                  )}
-
-                  <div className="mb-6">
-                    <h3 className="text-xl font-bold">{plan.name}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
-                    <div className="mt-4">
-                      <span className="text-4xl font-bold">{plan.price}</span>
-                      <span className="text-muted-foreground text-sm ml-2">/{plan.period}</span>
-                    </div>
-                  </div>
-
-                  <ul className="space-y-3 flex-1 mb-8">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2.5 text-sm">
-                        <Check className="h-4 w-4 text-fountain-400 shrink-0" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <SignedOut>
-                    <SignInButton mode="modal">
-                      <button
-                        className={`w-full rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                          plan.highlighted
-                            ? 'bg-fountain-500 text-white hover:bg-fountain-400'
-                            : 'border border-border hover:bg-secondary text-foreground'
-                        }`}
-                      >
-                        {plan.cta}
-                      </button>
-                    </SignInButton>
-                  </SignedOut>
-                  <SignedIn>
-                    <Link
-                      href="/dashboard"
-                      className={`w-full text-center rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                        plan.highlighted
-                          ? 'bg-fountain-500 text-white hover:bg-fountain-400'
-                          : 'border border-border hover:bg-secondary text-foreground'
-                      }`}
-                    >
-                      {plan.cta}
-                    </Link>
-                  </SignedIn>
                 </div>
               ))}
             </div>
